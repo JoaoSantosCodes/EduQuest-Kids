@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback - EduQuest Kids</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.95em;
+        }
+        input[type="text"],
+        input[type="email"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        .rating-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .rating-btn {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 80px;
+        }
+        .rating-btn:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        .rating-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .checkbox-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .checkbox-item label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #c3e6cb;
+            margin-top: 20px;
+            display: none;
+        }
+        .success-message.show {
+            display: block;
+        }
+        .info-box {
+            background: #f0f4ff;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            margin-bottom: 25px;
+        }
+        .info-box p {
+            margin: 0;
+            color: #555;
+        }
+        .required {
+            color: #e74c3c;
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+            .rating-group {
+                flex-direction: column;
+            }
+            .rating-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 EduQuest Kids</h1>
+            <p class="subtitle">Feedback dos Testadores</p>
+        </header>
+
+        <div class="info-box">
+            <p><strong>Obrigado por testar o EduQuest Kids!</strong> Sua opinião é muito valiosa para nós. Por favor, compartilhe suas impressões, sugestões e reporte qualquer problema que encontrar.</p>
+        </div>
+
+        <form id="feedbackForm">
+            <div class="form-group">
+                <label for="name">Nome <span class="required">*</span></label>
+                <input type="text" id="name" name="name" required placeholder="Seu nome completo">
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-mail <span class="required">*</span></label>
+                <input type="email" id="email" name="email" required placeholder="seu@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="role">Você é: <span class="required">*</span></label>
+                <select id="role" name="role" required>
+                    <option value="">Selecione...</option>
+                    <option value="student">Aluno</option>
+                    <option value="parent">Pai/Mãe</option>
+                    <option value="teacher">Professor</option>
+                    <option value="coordinator">Coordenador</option>
+                    <option value="other">Outro</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Avaliação Geral <span class="required">*</span></label>
+                <div class="rating-group">
+                    <button type="button" class="rating-btn" data-rating="1">⭐ 1</button>
+                    <button type="button" class="rating-btn" data-rating="2">⭐⭐ 2</button>
+                    <button type="button" class="rating-btn" data-rating="3">⭐⭐⭐ 3</button>
+                    <button type="button" class="rating-btn" data-rating="4">⭐⭐⭐⭐ 4</button>
+                    <button type="button" class="rating-btn" data-rating="5">⭐⭐⭐⭐⭐ 5</button>
+                </div>
+                <input type="hidden" id="rating" name="rating" required>
+            </div>
+
+            <div class="form-group">
+                <label>O que você achou? <span class="required">*</span></label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="liked-design" name="liked" value="design">
+                        <label for="liked-design">Design bonito e intuitivo</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="liked-gamification" name="liked" value="gamification">
+                        <label for="liked-gamification">Sistema de gamificação divertido</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="liked-content" name="liked" value="content">
+                        <label for="liked-content">Conteúdo educacional útil</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="liked-performance" name="liked" value="performance">
+                        <label for="liked-performance">App funciona rápido e sem travamentos</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="liked-navigation" name="liked" value="navigation">
+                        <label for="liked-navigation">Fácil de navegar</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>O que precisa melhorar?</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="improve-design" name="improve" value="design">
+                        <label for="improve-design">Design/Interface</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="improve-performance" name="improve" value="performance">
+                        <label for="improve-performance">Performance/Velocidade</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="improve-content" name="improve" value="content">
+                        <label for="improve-content">Conteúdo educacional</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="improve-features" name="improve" value="features">
+                        <label for="improve-features">Funcionalidades</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="improve-bugs" name="improve" value="bugs">
+                        <label for="improve-bugs">Correção de bugs</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="feedback">Feedback Detalhado</label>
+                <textarea id="feedback" name="feedback" placeholder="Descreva suas impressões, sugestões, problemas encontrados ou qualquer coisa que você gostaria de compartilhar..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="device">Dispositivo e Versão do Android</label>
+                <input type="text" id="device" name="device" placeholder="Ex: Samsung Galaxy S21, Android 12">
+            </div>
+
+            <button type="submit" class="submit-btn">Enviar Feedback</button>
+        </form>
+
+        <div class="success-message" id="successMessage">
+            <strong>✅ Obrigado pelo seu feedback!</strong><br>
+            Sua mensagem foi enviada com sucesso. Agradecemos muito sua contribuição!
+        </div>
+    </div>
+
+    <script>
+        // Seleção de avaliação
+        const ratingButtons = document.querySelectorAll('.rating-btn');
+        const ratingInput = document.getElementById('rating');
+        
+        ratingButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remove active de todos
+                ratingButtons.forEach(b => b.classList.remove('active'));
+                // Adiciona active no clicado
+                this.classList.add('active');
+                // Define o valor
+                ratingInput.value = this.dataset.rating;
+            });
+        });
+
+        // Envio do formulário
+        const form = document.getElementById('feedbackForm');
+        const successMessage = document.getElementById('successMessage');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validação de avaliação
+            if (!ratingInput.value) {
+                alert('Por favor, selecione uma avaliação (1 a 5 estrelas)');
+                return;
+            }
+
+            // Coletar dados do formulário
+            const formData = new FormData(form);
+            const data = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                role: formData.get('role'),
+                rating: formData.get('rating'),
+                liked: formData.getAll('liked'),
+                improve: formData.getAll('improve'),
+                feedback: formData.get('feedback'),
+                device: formData.get('device'),
+                timestamp: new Date().toISOString()
+            };
+
+            // Criar link mailto com os dados
+            const subject = encodeURIComponent(`Feedback EduQuest Kids - ${data.rating} estrelas`);
+            
+            let body = `Nome: ${data.name}\n`;
+            body += `E-mail: ${data.email}\n`;
+            body += `Papel: ${data.role}\n`;
+            body += `Avaliação: ${data.rating}/5 estrelas\n\n`;
+            
+            if (data.liked.length > 0) {
+                body += `O que gostou:\n${data.liked.map(l => `- ${l}`).join('\n')}\n\n`;
+            }
+            
+            if (data.improve.length > 0) {
+                body += `O que precisa melhorar:\n${data.improve.map(i => `- ${i}`).join('\n')}\n\n`;
+            }
+            
+            if (data.feedback) {
+                body += `Feedback detalhado:\n${data.feedback}\n\n`;
+            }
+            
+            if (data.device) {
+                body += `Dispositivo: ${data.device}\n`;
+            }
+            
+            body += `\nData: ${new Date().toLocaleString('pt-BR')}`;
+            
+            const mailtoLink = `mailto:feedback@eduquestkids.com?subject=${subject}&body=${encodeURIComponent(body)}`;
+            
+            // Abrir cliente de e-mail
+            window.location.href = mailtoLink;
+            
+            // Mostrar mensagem de sucesso
+            successMessage.classList.add('show');
+            form.reset();
+            ratingButtons.forEach(b => b.classList.remove('active'));
+            ratingInput.value = '';
+            
+            // Scroll para mensagem
+            successMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            // Ocultar mensagem após 5 segundos
+            setTimeout(() => {
+                successMessage.classList.remove('show');
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
+
