@@ -1,0 +1,671 @@
+EduQuiz Backend - Arquivos Finais e Guia de Instalação
+
+📁 Estrutura Completa do Projeto
+
+eduquiz-backend/
+├── config/
+│   └── database.js
+├── middleware/
+│   └── auth.js
+├── routes/
+│   ├── auth.js
+│   ├── students.js
+│   ├── parents.js
+│   ├── teachers.js
+│   ├── questions.js
+│   ├── quizzes.js
+│   ├── subjects.js
+│   ├── achievements.js
+│   └── notifications.js
+├── uploads/
+├── .env
+├── .env.example
+├── .gitignore
+├── package.json
+└── server.js
+
+📄 Arquivos Restantes
+
+11. routes/subjects.js
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
+
+// Listar todas as matérias
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT * FROM subjects WHERE is_active = true ORDER BY name'
+    );
+
+    res.json({ subjects: result.rows });
+  } catch (err) {
+    console.error('Erro ao listar matérias:', err);
+    res.status(500).json({ error: 'Erro ao listar matérias' });
+  }
+});
+
+// Buscar questões de uma matéria
+router.get('/:id/questions', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { grade_level, difficulty, limit = 20 } = req.query;
+
+  try {
+    let queryText = `
+      SELECT * FROM questions 
+      WHERE subject_id = $1 AND is_active = true AND approved = true
+    `;
+    const params = [id];
+    let paramCount = 1;
+
+    if (grade_level) {
+      paramCount++;
+      queryText += ` AND grade_level = $${paramCount}`;
+      params.push(grade_level);
+    }
+
+    if (difficulty) {
+      paramCount++;
+      queryText += ` AND difficulty = $${paramCount}`;
+      params.push(difficulty);
+    }
+
+    queryText += ` ORDER BY RANDOM() LIMIT $${paramCount + 1}`;
+    params.push(limit);
+
+    const result = await query(queryText, params);
+
+    res.json({ questions: result.rows });
+  } catch (err) {
+    console.error('Erro ao buscar questões:', err);
+    res.status(500).json({ error: 'Erro ao buscar questões' });
+  }
+});
+
+module.exports = router;
+
+12. routes/teachers.js
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+
+// Get teacher dashboard stats
+router.get('/:id/dashboard', 
+  authenticateToken, 
+  authorizeRoles('teacher'),
+  async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      // Buscar teacher_id
+      const teacherResult = await query(
+        'SELECT id FROM teachers WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (teacherResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Professor não encontrado' });
+      }
+
+      const teacherId = teacherResult.rows[0].id;
+
+      // Estatísticas
+      const stats = await query(
+        `SELECT 
+          (SELECT COUNT(*) FROM questions WHERE teacher_id = $1 AND is_active = true) as questions_created,
+          (SELECT COUNT(*) FROM quizzes WHERE teacher_id = $1 AND is_active = true) as quizzes_created,
+          (SELECT COUNT(DISTINCT qa.student_id) 
+           FROM quiz_attempts qa 
+           JOIN quizzes q ON qa.quiz_id = q.id 
+           WHERE q.teacher_id = $1) as active_students,
+          (SELECT ROUND(AVG(qa.percentage), 2)
+           FROM quiz_attempts qa 
+           JOIN quizzes q ON qa.quiz_id = q.id 
+           WHERE q.teacher_id = $1 AND qa.status = 'completed') as avg_class_score`,
+        [teacherId]
+      );
+
+      // Questões mais difíceis
+      const difficultQuestions = await query(
+        `SELECT 
+          q.id,
+          q.question_text,
+          q.difficulty,
+          ROUND((q.correct_count::DECIMAL / NULLIF(q.usage_count, 0)) * 100, 2) as success_rate
+         FROM questions q
+         WHERE q.teacher_id = $1 AND q.usage_count > 5
+         ORDER BY success_rate ASC
+         LIMIT 5`,
+        [teacherId]
+      );
+
+      // Alunos que precisam de atenção
+      const studentsNeedingHelp = await query(
+        `SELECT 
+          s.id,
+          u.name,
+          s.grade,
+          ROUND(AVG(qa.percentage), 2) as avg_score,
+          COUNT(qa.id) as quizzes_completed
+         FROM students s
+         JOIN users u ON s.user_id = u.id
+         JOIN quiz_attempts qa ON s.id = qa.student_id
+         JOIN quizzes q ON qa.quiz_id = q.id
+         WHERE q.teacher_id = $1 
+           AND qa.status = 'completed'
+           AND qa.completed_at >= NOW() - INTERVAL '30 days'
+         GROUP BY s.id, u.name, s.grade
+         HAVING ROUND(AVG(qa.percentage), 2) < 70
+         ORDER BY avg_score ASC
+         LIMIT 10`,
+        [teacherId]
+      );
+
+      res.json({
+        stats: stats.rows[0],
+        difficult_questions: difficultQuestions.rows,
+        students_needing_help: studentsNeedingHelp.rows
+      });
+    } catch (err) {
+      console.error('Erro ao buscar dashboard:', err);
+      res.status(500).json({ error: 'Erro ao buscar dashboard' });
+    }
+  }
+);
+
+// Get teacher students
+router.get('/:id/students',
+  authenticateToken,
+  authorizeRoles('teacher'),
+  async (req, res) => {
+    try {
+      // Buscar teacher_id
+      const teacherResult = await query(
+        'SELECT id FROM teachers WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      const teacherId = teacherResult.rows[0].id;
+
+      // Buscar alunos que fizeram quizzes deste professor
+      const result = await query(
+        `SELECT DISTINCT
+          s.id,
+          u.name,
+          s.grade,
+          s.total_points,
+          COUNT(DISTINCT qa.id) as quizzes_completed,
+          ROUND(AVG(qa.percentage), 2) as avg_score
+         FROM students s
+         JOIN users u ON s.user_id = u.id
+         JOIN quiz_attempts qa ON s.id = qa.student_id
+         JOIN quizzes q ON qa.quiz_id = q.id
+         WHERE q.teacher_id = $1 AND qa.status = 'completed'
+         GROUP BY s.id, u.name, s.grade, s.total_points
+         ORDER BY avg_score DESC`,
+        [teacherId]
+      );
+
+      res.json({ students: result.rows });
+    } catch (err) {
+      console.error('Erro ao buscar alunos:', err);
+      res.status(500).json({ error: 'Erro ao buscar alunos' });
+    }
+  }
+);
+
+// Bulk import questions (CSV)
+router.post('/:id/questions/bulk-import',
+  authenticateToken,
+  authorizeRoles('teacher'),
+  async (req, res) => {
+    const { questions } = req.body; // Array de questões
+
+    try {
+      // Buscar teacher_id
+      const teacherResult = await query(
+        'SELECT id FROM teachers WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      const teacherId = teacherResult.rows[0].id;
+
+      const imported = [];
+      
+      for (const q of questions) {
+        const result = await query(
+          `INSERT INTO questions 
+          (subject_id, teacher_id, question_text, options, correct_answer, 
+           difficulty, grade_level, tags)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id`,
+          [q.subject_id, teacherId, q.question_text, JSON.stringify(q.options),
+           q.correct_answer, q.difficulty, q.grade_level, q.tags]
+        );
+        imported.push(result.rows[0].id);
+      }
+
+      res.json({
+        message: `${imported.length} questões importadas com sucesso`,
+        imported_ids: imported
+      });
+    } catch (err) {
+      console.error('Erro ao importar questões:', err);
+      res.status(500).json({ error: 'Erro ao importar questões' });
+    }
+  }
+);
+
+module.exports = router;
+
+13. routes/achievements.js
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
+
+// Listar todas as conquistas
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT * FROM achievements WHERE is_active = true ORDER BY rarity, points_reward DESC'
+    );
+
+    res.json({ achievements: result.rows });
+  } catch (err) {
+    console.error('Erro ao listar conquistas:', err);
+    res.status(500).json({ error: 'Erro ao listar conquistas' });
+  }
+});
+
+// Verificar e desbloquear conquistas para um aluno
+router.post('/check/:studentId',
+  authenticateToken,
+  authorizeRoles('student'),
+  async (req, res) => {
+    const { studentId } = req.params;
+
+    try {
+      // Buscar dados do aluno
+      const studentData = await query(
+        `SELECT 
+          s.*,
+          COUNT(DISTINCT qa.id) as total_quizzes,
+          COUNT(DISTINCT CASE WHEN qa.percentage = 100 THEN qa.id END) as perfect_quizzes
+         FROM students s
+         LEFT JOIN quiz_attempts qa ON s.id = qa.student_id AND qa.status = 'completed'
+         WHERE s.id = $1
+         GROUP BY s.id`,
+        [studentId]
+      );
+
+      if (studentData.rows.length === 0) {
+        return res.status(404).json({ error: 'Aluno não encontrado' });
+      }
+
+      const student = studentData.rows[0];
+      const newAchievements = [];
+
+      // Buscar conquistas ainda não desbloqueadas
+      const availableAchievements = await query(
+        `SELECT a.* FROM achievements a
+         WHERE a.is_active = true
+         AND a.id NOT IN (
+           SELECT achievement_id FROM student_achievements WHERE student_id = $1
+         )`,
+        [studentId]
+      );
+
+      // Verificar cada conquista
+      for (const achievement of availableAchievements.rows) {
+        let unlocked = false;
+
+        switch (achievement.condition_type) {
+          case 'quizzes_completed':
+            unlocked = student.total_quizzes >= achievement.condition_value;
+            break;
+          case 'perfect_quiz':
+            unlocked = student.perfect_quizzes >= achievement.condition_value;
+            break;
+          case 'level_reached':
+            unlocked = student.level >= achievement.condition_value;
+            break;
+          case 'streak_days':
+            unlocked = student.streak_days >= achievement.condition_value;
+            break;
+          case 'study_hours':
+            unlocked = student.study_time_seconds >= achievement.condition_value;
+            break;
+        }
+
+        if (unlocked) {
+          // Desbloquear conquista
+          await query(
+            'INSERT INTO student_achievements (student_id, achievement_id) VALUES ($1, $2)',
+            [studentId, achievement.id]
+          );
+
+          // Adicionar pontos bônus
+          if (achievement.points_reward > 0) {
+            await query(
+              'UPDATE students SET total_points = total_points + $1 WHERE id = $2',
+              [achievement.points_reward, studentId]
+            );
+          }
+
+          newAchievements.push(achievement);
+        }
+      }
+
+      res.json({
+        message: `${newAchievements.length} novas conquistas desbloqueadas`,
+        new_achievements: newAchievements
+      });
+    } catch (err) {
+      console.error('Erro ao verificar conquistas:', err);
+      res.status(500).json({ error: 'Erro ao verificar conquistas' });
+    }
+  }
+);
+
+module.exports = router;
+
+14. routes/notifications.js
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
+
+// Buscar notificações do usuário
+router.get('/', authenticateToken, async (req, res) => {
+  const { limit = 20, unread_only = false } = req.query;
+
+  try {
+    let queryText = 'SELECT * FROM notifications WHERE user_id = $1';
+    const params = [req.user.id];
+
+    if (unread_only === 'true') {
+      queryText += ' AND is_read = false';
+    }
+
+    queryText += ' ORDER BY created_at DESC LIMIT $2';
+    params.push(limit);
+
+    const result = await query(queryText, params);
+
+    res.json({ notifications: result.rows });
+  } catch (err) {
+    console.error('Erro ao buscar notificações:', err);
+    res.status(500).json({ error: 'Erro ao buscar notificações' });
+  }
+});
+
+// Marcar como lida
+router.put('/:id/read', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await query(
+      'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2 RETURNING *',
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notificação não encontrada' });
+    }
+
+    res.json({ notification: result.rows[0] });
+  } catch (err) {
+    console.error('Erro ao marcar notificação:', err);
+    res.status(500).json({ error: 'Erro ao marcar notificação' });
+  }
+});
+
+// Marcar todas como lidas
+router.post('/mark-all-read', authenticateToken, async (req, res) => {
+  try {
+    await query(
+      'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
+      [req.user.id]
+    );
+
+    res.json({ message: 'Todas as notificações foram marcadas como lidas' });
+  } catch (err) {
+    console.error('Erro ao marcar notificações:', err);
+    res.status(500).json({ error: 'Erro ao marcar notificações' });
+  }
+});
+
+module.exports = router;
+
+🚀 Guia de Instalação
+Pré-requisitos
+
+Node.js 18+ instalado
+PostgreSQL 14+ instalado (ou conta no Supabase)
+Git
+
+Passo 1: Clonar e Configurar
+
+# Criar pasta do projeto
+mkdir eduquiz-backend
+cd eduquiz-backend
+
+# Inicializar projeto
+npm init -y
+
+# Instalar dependências
+npm install express pg bcrypt jsonwebtoken dotenv cors express-validator express-rate-limit helmet morgan multer nodemailer
+
+# Instalar dependências de desenvolvimento
+npm install --save-dev nodemon
+
+Passo 2: Criar Estrutura de Pastas
+
+mkdir config middleware routes uploads
+
+Passo 3: Criar arquivo .env
+
+# Copiar do .env.example
+cp .env.example .env
+
+# Editar .env com suas credenciais
+nano .env
+
+Exemplo de .env:
+
+DATABASE_URL=postgresql://postgres:suasenha@localhost:5432/eduquiz
+JWT_SECRET=mude_isto_para_algo_super_seguro_e_aleatorio
+JWT_EXPIRES_IN=7d
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+
+Passo 4: Executar SQL no Banco
+
+# Se usando Supabase:
+# 1. Vá para o SQL Editor
+# 2. Cole todo o schema SQL
+# 3. Execute
+
+# Se usando PostgreSQL local:
+psql -U postgres -d eduquiz -f schema.sql
+
+Passo 5: Criar todos os arquivos
+Copie todos os códigos fornecidos para os respectivos arquivos na estrutura de pastas.
+Passo 6: Iniciar o servidor
+
+# Modo desenvolvimento (com auto-reload)
+npm run dev
+
+# Modo produção
+npm start
+
+O servidor estará rodando em http://localhost:3001
+
+🧪 Testando a API
+1. Registro de usuário
+
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "aluno@teste.com",
+    "password": "senha123",
+    "name": "Aluno Teste",
+    "role": "student",
+    "grade": 7
+  }'
+  
+2. Login
+
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "aluno@teste.com",
+    "password": "senha123"
+  }'
+  
+  Guarde o token retornado!
+  
+  3. Listar matérias
+  
+  curl http://localhost:3001/api/subjects \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+  
+  4. Criar questão (como professor)
+  
+  curl -X POST http://localhost:3001/api/questions \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject_id": "UUID_DA_MATERIA",
+    "question_text": "Quanto é 2 + 2?",
+    "options": ["3", "4", "5", "6"],
+    "correct_answer": 1,
+    "difficulty": "easy",
+    "grade_level": 6,
+    "tags": ["matemática", "soma"]
+  }'
+  
+  📦 Deploy
+Opção 1: Railway.app (Recomendado)
+
+Crie conta no Railway.app
+Clique em "New Project"
+Selecione "Deploy from GitHub repo"
+Conecte seu repositório
+Adicione PostgreSQL como serviço
+Configure variáveis de ambiente
+Deploy automático! 🚀
+
+Opção 2: Render.com
+
+Crie conta no Render.com
+New > Web Service
+Conecte repositório
+Configure:
+
+Build Command: npm install
+Start Command: npm start
+
+
+Adicione PostgreSQL
+Configure variáveis de ambiente
+Deploy!
+
+Opção 3: Heroku
+
+# Instalar Heroku CLI
+heroku login
+heroku create eduquiz-api
+
+# Adicionar PostgreSQL
+heroku addons:create heroku-postgresql:mini
+
+# Deploy
+git push heroku main
+
+# Configurar variáveis
+heroku config:set JWT_SECRET=seu_secret
+heroku config:set FRONTEND_URL=https://seu-frontend.com
+
+📚 Documentação da API
+Endpoints Principais
+Autenticação
+
+POST /api/auth/register - Registrar usuário
+POST /api/auth/login - Login
+GET /api/auth/me - Dados do usuário atual
+
+Questões
+
+GET /api/questions - Listar questões
+POST /api/questions - Criar questão
+PUT /api/questions/:id - Atualizar questão
+DELETE /api/questions/:id - Deletar questão
+
+Quizzes
+
+GET /api/quizzes/available - Quizzes disponíveis
+POST /api/quizzes - Criar quiz
+POST /api/quizzes/:id/attempt - Iniciar tentativa
+POST /api/quizzes/:id/attempt/:attemptId/submit - Submeter respostas
+
+Alunos
+
+GET /api/students/:id/stats - Estatísticas
+GET /api/students/:id/history - Histórico
+GET /api/students/:id/achievements - Conquistas
+
+Pais
+
+GET /api/parents/:id/children - Listar filhos
+GET /api/parents/:id/children/:studentId/reports - Relatórios
+POST /api/parents/:id/children/:studentId/goals - Criar meta
+
+Professores
+
+GET /api/teachers/:id/dashboard - Dashboard
+GET /api/teachers/:id/students - Alunos
+POST /api/teachers/:id/questions/bulk-import - Importar questões
+
+
+🔒 Segurança
+
+✅ Senhas hasheadas com bcrypt
+✅ JWT para autenticação
+✅ Rate limiting
+✅ Helmet.js para headers de segurança
+✅ Validação de inputs
+✅ CORS configurado
+✅ SQL injection prevention (parametrized queries)
+
+
+🐛 Troubleshooting
+Erro: "Cannot connect to database"
+
+Verifique se PostgreSQL está rodando
+Confira o DATABASE_URL no .env
+Teste conexão: psql -U postgres
+
+Erro: "JWT secret not defined"
+
+Configure JWT_SECRET no .env
+Reinicie o servidor
+
+Erro: "Port 3001 already in use"
+
+Mude a porta no .env: PORT=3002
+Ou mate o processo: kill -9 $(lsof -ti:3001)
+
+
+📞 Suporte
+Dúvidas? Problemas? Estou aqui para ajudar! 🚀
+
+

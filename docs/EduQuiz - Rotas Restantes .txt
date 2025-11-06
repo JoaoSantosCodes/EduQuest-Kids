@@ -1,0 +1,782 @@
+// ============================================
+// 8. ARQUIVO: routes/quizzes.js
+// ============================================
+
+const express = require('express');
+const router = express.Router();
+const { body, validationResult } = require('express-validator');
+const { query } = require('../config/database');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+
+// Criar quiz
+router.post('/',
+  authenticateToken,
+  authorizeRoles('teacher', 'admin'),
+  body('title').trim().isLength({ min: 3 }),
+  body('subject_id').isUUID(),
+  body('grade_level').isInt({ min: 1, max: 12 }),
+  body('type').isIn(['practice', 'test', 'exam']),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const {
+      title,
+      description,
+      subject_id,
+      grade_level,
+      type,
+      time_limit_minutes,
+      question_ids,
+      shuffle_questions,
+      shuffle_options,
+      show_explanations,
+      allow_retries,
+      available_from,
+      available_until
+    } = req.body;
+
+    try {
+      // Buscar teacher_id
+      const teacherResult = await query(
+        'SELECT id FROM teachers WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (teacherResult.rows.length === 0) {
+        return res.status(403).json({ error: 'Professor não encontrado' });
+      }
+
+      const teacherId = teacherResult.rows[0].id;
+
+      // Criar quiz
+      const quizResult = await query(
+        `INSERT INTO quizzes 
+        (title, description, subject_id, teacher_id, grade_level, type, time_limit_minutes, 
+         shuffle_questions, shuffle_options, show_explanations, allow_retries, 
+         available_from, available_until, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING *`,
+        [title, description, subject_id, teacherId, grade_level, type, time_limit_minutes,
+         shuffle_questions, shuffle_options, show_explanations, allow_retries,
+         available_from, available_until, 'active']
+      );
+
+      const quiz = quizResult.rows[0];
+
+      // Adicionar questões ao quiz
+      if (question_ids && question_ids.length > 0) {
+        for (let i = 0; i < question_ids.length; i++) {
+          await query(
+            `INSERT INTO quiz_questions (quiz_id, question_id, order_number)
+             VALUES ($1, $2, $3)`,
+            [quiz.id, question_ids[i], i + 1]
+          );
+        }
+      }
+
+      res.status(201).json({
+        message: 'Quiz criado com sucesso',
+        quiz
+      });
+    } catch (err) {
+      console.error('Erro ao criar quiz:', err);
+      res.status(500).json({ error: 'Erro ao criar quiz' });
+    }
+  }
+);
+
+// Listar quizzes disponíveis para aluno
+router.get('/available', authenticateToken, authorizeRoles('student'), async (req, res) => {
+  try {
+    // Buscar student_id
+    const studentResult = await query(
+      'SELECT id, grade FROM students WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+
+    const { id: studentId, grade } = studentResult.rows[0];
+
+    // Buscar quizzes disponíveis
+    const result = await query(
+      `SELECT q.*, s.name as subject_name, s.icon, s.color,
+              COUNT(qq.id) as total_questions
+       FROM quizzes q
+       JOIN subjects s ON q.subject_id = s.id
+       LEFT JOIN quiz_questions qq ON q.quiz_id = qq.quiz_id
+       WHERE q.is_active = true
+         AND q.status = 'active'
+         AND q.grade_level = $1
+         AND (q.available_from IS NULL OR q.available_from <= NOW())
+         AND (q.available_until IS NULL OR q.available_until >= NOW())
+       GROUP BY q.id, s.name, s.icon, s.color
+       ORDER BY q.created_at DESC`,
+      [grade]
+    );
+
+    res.json({ quizzes: result.rows });
+  } catch (err) {
+    console.error('Erro ao listar quizzes:', err);
+    res.status(500).json({ error: 'Erro ao listar quizzes' });
+  }
+});
+
+// Iniciar tentativa de quiz
+router.post('/:id/attempt', authenticateToken, authorizeRoles('student'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Buscar student_id
+    const studentResult = await query(
+      'SELECT id FROM students WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+
+    const studentId = studentResult.rows[0].id;
+
+    // Buscar quiz com questões
+    const quizResult = await query(
+      `SELECT q.*, COUNT(qq.id) as total_questions
+       FROM quizzes q
+       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+       WHERE q.id = $1 AND q.is_active = true
+       GROUP BY q.id`,
+      [id]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Quiz não encontrado' });
+    }
+
+    const quiz = quizResult.rows[0];
+
+    // Verificar se pode fazer o quiz
+    if (!quiz.allow_retries) {
+      const attemptCheck = await query(
+        'SELECT id FROM quiz_attempts WHERE quiz_id = $1 AND student_id = $2 AND status = $3',
+        [id, studentId, 'completed']
+      );
+
+      if (attemptCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Você já completou este quiz e não pode refazê-lo' });
+      }
+    }
+
+    // Buscar questões do quiz
+    const questionsResult = await query(
+      `SELECT q.id, q.question_text, q.options, q.difficulty, q.points
+       FROM questions q
+       JOIN quiz_questions qq ON q.id = qq.question_id
+       WHERE qq.quiz_id = $1
+       ORDER BY ${quiz.shuffle_questions ? 'RANDOM()' : 'qq.order_number'}`,
+      [id]
+    );
+
+    // Criar tentativa
+    const attemptResult = await query(
+      `INSERT INTO quiz_attempts (quiz_id, student_id, total_questions, total_points)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [id, studentId, quiz.total_questions, quiz.total_points || quiz.total_questions * 10]
+    );
+
+    res.json({
+      attempt: attemptResult.rows[0],
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        time_limit_minutes: quiz.time_limit_minutes,
+        total_questions: quiz.total_questions
+      },
+      questions: questionsResult.rows.map(q => ({
+        id: q.id,
+        question_text: q.question_text,
+        options: quiz.shuffle_options ? 
+          q.options.sort(() => Math.random() - 0.5) : 
+          q.options,
+        difficulty: q.difficulty,
+        points: q.points
+      }))
+    });
+  } catch (err) {
+    console.error('Erro ao iniciar quiz:', err);
+    res.status(500).json({ error: 'Erro ao iniciar quiz' });
+  }
+});
+
+// Submeter respostas do quiz
+router.post('/:id/attempt/:attemptId/submit',
+  authenticateToken,
+  authorizeRoles('student'),
+  body('answers').isArray({ min: 1 }),
+  async (req, res) => {
+    const { id, attemptId } = req.params;
+    const { answers, time_spent_seconds } = req.body;
+
+    try {
+      // Buscar tentativa
+      const attemptResult = await query(
+        'SELECT * FROM quiz_attempts WHERE id = $1 AND quiz_id = $2',
+        [attemptId, id]
+      );
+
+      if (attemptResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Tentativa não encontrada' });
+      }
+
+      const attempt = attemptResult.rows[0];
+
+      if (attempt.status === 'completed') {
+        return res.status(400).json({ error: 'Esta tentativa já foi concluída' });
+      }
+
+      // Buscar respostas corretas
+      const questionIds = answers.map(a => a.question_id);
+      const questionsResult = await query(
+        'SELECT id, correct_answer, points FROM questions WHERE id = ANY($1)',
+        [questionIds]
+      );
+
+      const questionsMap = {};
+      questionsResult.rows.forEach(q => {
+        questionsMap[q.id] = q;
+      });
+
+      // Calcular pontuação
+      let score = 0;
+      let correctCount = 0;
+      const processedAnswers = answers.map(answer => {
+        const question = questionsMap[answer.question_id];
+        const isCorrect = question && answer.selected_answer === question.correct_answer;
+        
+        if (isCorrect) {
+          score += question.points || 10;
+          correctCount++;
+        }
+
+        return {
+          question_id: answer.question_id,
+          selected_answer: answer.selected_answer,
+          is_correct: isCorrect,
+          time_spent: answer.time_spent || 0
+        };
+      });
+
+      // Atualizar tentativa
+      const updateResult = await query(
+        `UPDATE quiz_attempts 
+         SET score = $1, 
+             correct_answers = $2,
+             answers = $3,
+             time_spent_seconds = $4,
+             completed_at = NOW(),
+             status = 'completed'
+         WHERE id = $5
+         RETURNING *`,
+        [score, correctCount, JSON.stringify(processedAnswers), time_spent_seconds, attemptId]
+      );
+
+      // Atualizar pontos do aluno
+      await query(
+        'UPDATE students SET total_points = total_points + $1 WHERE id = $2',
+        [score, attempt.student_id]
+      );
+
+      res.json({
+        message: 'Quiz concluído com sucesso',
+        result: updateResult.rows[0],
+        answers: processedAnswers
+      });
+    } catch (err) {
+      console.error('Erro ao submeter quiz:', err);
+      res.status(500).json({ error: 'Erro ao submeter quiz' });
+    }
+  }
+);
+
+// Buscar resultados de uma tentativa
+router.get('/:id/attempt/:attemptId', authenticateToken, async (req, res) => {
+  const { id, attemptId } = req.params;
+
+  try {
+    const result = await query(
+      `SELECT qa.*, q.title, q.show_explanations, u.name as student_name
+       FROM quiz_attempts qa
+       JOIN quizzes q ON qa.quiz_id = q.id
+       JOIN students s ON qa.student_id = s.id
+       JOIN users u ON s.user_id = u.id
+       WHERE qa.id = $1 AND qa.quiz_id = $2`,
+      [attemptId, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Resultado não encontrado' });
+    }
+
+    const attempt = result.rows[0];
+
+    // Buscar questões com explicações (se permitido)
+    if (attempt.show_explanations && attempt.status === 'completed') {
+      const questionIds = attempt.answers.map(a => a.question_id);
+      const questionsResult = await query(
+        'SELECT id, question_text, correct_answer, explanation FROM questions WHERE id = ANY($1)',
+        [questionIds]
+      );
+
+      attempt.questions_details = questionsResult.rows;
+    }
+
+    res.json(attempt);
+  } catch (err) {
+    console.error('Erro ao buscar resultado:', err);
+    res.status(500).json({ error: 'Erro ao buscar resultado' });
+  }
+});
+
+module.exports = router;
+
+// ============================================
+// 9. ARQUIVO: routes/students.js
+// ============================================
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+
+// Get student stats
+router.get('/:id/stats', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verificar permissão
+    if (req.user.role === 'student') {
+      const studentResult = await query(
+        'SELECT id FROM students WHERE user_id = $1',
+        [req.user.id]
+      );
+      if (studentResult.rows.length === 0 || studentResult.rows[0].id !== id) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+    }
+
+    // Buscar estatísticas gerais
+    const statsResult = await query(
+      `SELECT 
+        s.*,
+        u.name,
+        u.email,
+        COUNT(DISTINCT qa.id) as total_quizzes,
+        ROUND(AVG(qa.percentage), 2) as avg_score,
+        COUNT(DISTINCT sa.achievement_id) as achievements_count
+       FROM students s
+       JOIN users u ON s.user_id = u.id
+       LEFT JOIN quiz_attempts qa ON s.id = qa.student_id AND qa.status = 'completed'
+       LEFT JOIN student_achievements sa ON s.id = sa.student_id
+       WHERE s.id = $1
+       GROUP BY s.id, u.name, u.email`,
+      [id]
+    );
+
+    if (statsResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+
+    // Buscar desempenho por matéria
+    const subjectPerformance = await query(
+      `SELECT 
+        subj.name as subject_name,
+        subj.icon,
+        subj.color,
+        COUNT(qa.id) as quizzes_completed,
+        ROUND(AVG(qa.percentage), 2) as avg_score,
+        SUM(qa.score) as total_points
+       FROM subjects subj
+       LEFT JOIN quizzes q ON subj.id = q.subject_id
+       LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id AND qa.student_id = $1 AND qa.status = 'completed'
+       GROUP BY subj.id, subj.name, subj.icon, subj.color
+       ORDER BY avg_score DESC NULLS LAST`,
+      [id]
+    );
+
+    // Buscar atividade recente (últimos 7 dias)
+    const recentActivity = await query(
+      `SELECT 
+        DATE(completed_at) as date,
+        COUNT(*) as quizzes_completed,
+        SUM(time_spent_seconds) as time_spent,
+        SUM(score) as points_earned
+       FROM quiz_attempts
+       WHERE student_id = $1 
+         AND status = 'completed'
+         AND completed_at >= NOW() - INTERVAL '7 days'
+       GROUP BY DATE(completed_at)
+       ORDER BY date DESC`,
+      [id]
+    );
+
+    res.json({
+      student: statsResult.rows[0],
+      subject_performance: subjectPerformance.rows,
+      recent_activity: recentActivity.rows
+    });
+  } catch (err) {
+    console.error('Erro ao buscar estatísticas:', err);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+  }
+});
+
+// Get student history
+router.get('/:id/history', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { limit = 20, offset = 0 } = req.query;
+
+  try {
+    const result = await query(
+      `SELECT 
+        qa.*,
+        q.title as quiz_title,
+        q.type,
+        s.name as subject_name,
+        s.icon as subject_icon
+       FROM quiz_attempts qa
+       JOIN quizzes q ON qa.quiz_id = q.id
+       JOIN subjects s ON q.subject_id = s.id
+       WHERE qa.student_id = $1 AND qa.status = 'completed'
+       ORDER BY qa.completed_at DESC
+       LIMIT $2 OFFSET $3`,
+      [id, limit, offset]
+    );
+
+    res.json({
+      history: result.rows,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (err) {
+    console.error('Erro ao buscar histórico:', err);
+    res.status(500).json({ error: 'Erro ao buscar histórico' });
+  }
+});
+
+// Get student achievements
+router.get('/:id/achievements', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await query(
+      `SELECT 
+        a.*,
+        sa.unlocked_at
+       FROM achievements a
+       JOIN student_achievements sa ON a.id = sa.achievement_id
+       WHERE sa.student_id = $1
+       ORDER BY sa.unlocked_at DESC`,
+      [id]
+    );
+
+    res.json({ achievements: result.rows });
+  } catch (err) {
+    console.error('Erro ao buscar conquistas:', err);
+    res.status(500).json({ error: 'Erro ao buscar conquistas' });
+  }
+});
+
+// Start study session
+router.post('/:id/study-session/start',
+  authenticateToken,
+  authorizeRoles('student'),
+  async (req, res) => {
+    const { id } = req.params;
+    const { subject_id } = req.body;
+
+    try {
+      const result = await query(
+        'INSERT INTO study_sessions (student_id, subject_id) VALUES ($1, $2) RETURNING *',
+        [id, subject_id]
+      );
+
+      res.json({
+        message: 'Sessão de estudo iniciada',
+        session: result.rows[0]
+      });
+    } catch (err) {
+      console.error('Erro ao iniciar sessão:', err);
+      res.status(500).json({ error: 'Erro ao iniciar sessão de estudo' });
+    }
+  }
+);
+
+// End study session
+router.post('/:id/study-session/:sessionId/end',
+  authenticateToken,
+  authorizeRoles('student'),
+  async (req, res) => {
+    const { id, sessionId } = req.params;
+    const { points_earned, activities } = req.body;
+
+    try {
+      const result = await query(
+        `UPDATE study_sessions 
+         SET ended_at = NOW(),
+             duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at)),
+             points_earned = $1,
+             activities = $2
+         WHERE id = $3 AND student_id = $4
+         RETURNING *`,
+        [points_earned, JSON.stringify(activities), sessionId, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Sessão não encontrada' });
+      }
+
+      // Atualizar tempo total do aluno
+      await query(
+        'UPDATE students SET study_time_seconds = study_time_seconds + $1 WHERE id = $2',
+        [result.rows[0].duration_seconds, id]
+      );
+
+      res.json({
+        message: 'Sessão de estudo finalizada',
+        session: result.rows[0]
+      });
+    } catch (err) {
+      console.error('Erro ao finalizar sessão:', err);
+      res.status(500).json({ error: 'Erro ao finalizar sessão' });
+    }
+  }
+);
+
+module.exports = router;
+
+// ============================================
+// 10. ARQUIVO: routes/parents.js
+// ============================================
+
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+
+// Get children
+router.get('/:id/children', 
+  authenticateToken, 
+  authorizeRoles('parent'),
+  async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      // Buscar parent_id
+      const parentResult = await query(
+        'SELECT id FROM parents WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (parentResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Pai/mãe não encontrado' });
+      }
+
+      const parentId = parentResult.rows[0].id;
+
+      // Buscar filhos
+      const result = await query(
+        `SELECT 
+          s.*,
+          u.name,
+          u.email,
+          psr.relationship,
+          psr.can_view_reports,
+          psr.can_set_goals
+         FROM students s
+         JOIN users u ON s.user_id = u.id
+         JOIN parent_student_relation psr ON s.id = psr.student_id
+         WHERE psr.parent_id = $1`,
+        [parentId]
+      );
+
+      res.json({ children: result.rows });
+    } catch (err) {
+      console.error('Erro ao buscar filhos:', err);
+      res.status(500).json({ error: 'Erro ao buscar filhos' });
+    }
+  }
+);
+
+// Get child reports
+router.get('/:id/children/:studentId/reports',
+  authenticateToken,
+  authorizeRoles('parent'),
+  async (req, res) => {
+    const { studentId } = req.params;
+    const { period = 'week' } = req.query; // week, month, year
+
+    try {
+      let dateFilter = "NOW() - INTERVAL '7 days'";
+      if (period === 'month') dateFilter = "NOW() - INTERVAL '30 days'";
+      if (period === 'year') dateFilter = "NOW() - INTERVAL '1 year'";
+
+      // Estatísticas gerais
+      const statsResult = await query(
+        `SELECT 
+          COUNT(DISTINCT qa.id) as total_quizzes,
+          ROUND(AVG(qa.percentage), 2) as avg_score,
+          SUM(qa.time_spent_seconds) as total_study_time,
+          SUM(qa.score) as total_points
+         FROM quiz_attempts qa
+         WHERE qa.student_id = $1 
+           AND qa.status = 'completed'
+           AND qa.completed_at >= ${dateFilter}`,
+        [studentId]
+      );
+
+      // Desempenho por matéria
+      const subjectPerformance = await query(
+        `SELECT 
+          s.name as subject_name,
+          s.icon,
+          s.color,
+          COUNT(qa.id) as quizzes_completed,
+          ROUND(AVG(qa.percentage), 2) as avg_score
+         FROM quiz_attempts qa
+         JOIN quizzes q ON qa.quiz_id = q.id
+         JOIN subjects s ON q.subject_id = s.id
+         WHERE qa.student_id = $1 
+           AND qa.status = 'completed'
+           AND qa.completed_at >= ${dateFilter}
+         GROUP BY s.id, s.name, s.icon, s.color`,
+        [studentId]
+      );
+
+      // Atividade diária
+      const dailyActivity = await query(
+        `SELECT 
+          DATE(completed_at) as date,
+          COUNT(*) as quizzes,
+          SUM(time_spent_seconds) as time_spent,
+          ROUND(AVG(percentage), 2) as avg_score
+         FROM quiz_attempts
+         WHERE student_id = $1 
+           AND status = 'completed'
+           AND completed_at >= ${dateFilter}
+         GROUP BY DATE(completed_at)
+         ORDER BY date`,
+        [studentId]
+      );
+
+      res.json({
+        stats: statsResult.rows[0],
+        subject_performance: subjectPerformance.rows,
+        daily_activity: dailyActivity.rows
+      });
+    } catch (err) {
+      console.error('Erro ao buscar relatórios:', err);
+      res.status(500).json({ error: 'Erro ao buscar relatórios' });
+    }
+  }
+);
+
+// Set study goal
+router.post('/:id/children/:studentId/goals',
+  authenticateToken,
+  authorizeRoles('parent'),
+  async (req, res) => {
+    const { studentId } = req.params;
+    const {
+      subject_id,
+      goal_description,
+      daily_time_goal_minutes,
+      weekly_quizzes_goal,
+      start_date,
+      end_date
+    } = req.body;
+
+    try {
+      const result = await query(
+        `INSERT INTO study_plans 
+        (student_id, created_by, subject_id, goal_description, 
+         daily_time_goal_minutes, weekly_quizzes_goal, start_date, end_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [studentId, req.user.id, subject_id, goal_description,
+         daily_time_goal_minutes, weekly_quizzes_goal, start_date, end_date]
+      );
+
+      res.status(201).json({
+        message: 'Meta criada com sucesso',
+        goal: result.rows[0]
+      });
+    } catch (err) {
+      console.error('Erro ao criar meta:', err);
+      res.status(500).json({ error: 'Erro ao criar meta' });
+    }
+  }
+);
+
+// Update parental controls
+router.put('/:id/children/:studentId/settings',
+  authenticateToken,
+  authorizeRoles('parent'),
+  async (req, res) => {
+    const { studentId } = req.params;
+    const {
+      max_daily_time_minutes,
+      allowed_start_time,
+      allowed_end_time,
+      notifications_enabled,
+      weekly_report_enabled
+    } = req.body;
+
+    try {
+      // Buscar parent_id
+      const parentResult = await query(
+        'SELECT id FROM parents WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      const parentId = parentResult.rows[0].id;
+
+      const result = await query(
+        `INSERT INTO parental_controls 
+        (student_id, parent_id, max_daily_time_minutes, allowed_start_time, 
+         allowed_end_time, notifications_enabled, weekly_report_enabled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (student_id, parent_id) 
+        DO UPDATE SET
+          max_daily_time_minutes = $3,
+          allowed_start_time = $4,
+          allowed_end_time = $5,
+          notifications_enabled = $6,
+          weekly_report_enabled = $7,
+          updated_at = NOW()
+        RETURNING *`,
+        [studentId, parentId, max_daily_time_minutes, allowed_start_time,
+         allowed_end_time, notifications_enabled, weekly_report_enabled]
+      );
+
+      res.json({
+        message: 'Configurações atualizadas com sucesso',
+        settings: result.rows[0]
+      });
+    } catch (err) {
+      console.error('Erro ao atualizar configurações:', err);
+      res.status(500).json({ error: 'Erro ao atualizar configurações' });
+    }
+  }
+);
+
+module.exports = router;
+
+// ============================================
+// CONTINUA... (routes/subjects, teachers, etc)
+// ============================================

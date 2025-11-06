@@ -1,0 +1,606 @@
+EduQuiz - Arquitetura Completa do Sistema
+📋 Visão Geral do Sistema
+Sistema educacional gamificado com 3 portais integrados:
+
+Portal do Aluno: Quiz interativo e gamificação
+Portal dos Pais: Monitoramento e relatórios
+Portal do Professor: Gestão de conteúdo e avaliações
+
+
+🏗️ Arquitetura Técnica
+Stack Recomendada
+Frontend:
+
+React + TypeScript
+TailwindCSS para UI
+React Router para navegação
+Recharts para gráficos
+Zustand ou Context API para estado global
+
+Backend:
+
+Node.js + Express (ou Supabase/Firebase para início rápido)
+PostgreSQL para banco de dados
+JWT para autenticação
+Socket.io para atualizações em tempo real (opcional)
+
+Hospedagem Sugerida:
+
+Frontend: Vercel, Netlify ou Cloudflare Pages
+Backend: Railway, Render ou Supabase
+Banco: Supabase, Neon ou PlanetScale
+
+🗄️ Estrutura do Banco de Dados
+Tabela: users
+
+id: UUID (PK)
+email: STRING
+password: STRING (hash)
+name: STRING
+role: ENUM ('student', 'parent', 'teacher')
+avatar_url: STRING
+created_at: TIMESTAMP
+updated_at: TIMESTAMP
+
+Tabela: students
+
+id: UUID (PK)
+user_id: UUID (FK -> users)
+grade: INTEGER (6, 7, 8, 9...)
+school: STRING
+total_points: INTEGER
+level: INTEGER
+study_time: INTEGER (seconds)
+streak_days: INTEGER
+last_activity: TIMESTAMP
+
+Tabela: parent_student_relation
+
+id: UUID (PK)
+parent_id: UUID (FK -> users)
+student_id: UUID (FK -> students)
+relationship: STRING ('pai', 'mãe', 'responsável')
+can_view_reports: BOOLEAN
+can_set_goals: BOOLEAN
+
+Tabela: teachers
+
+id: UUID (PK)
+user_id: UUID (FK -> users)
+specialization: STRING[]
+school: STRING
+bio: TEXT
+
+Tabela: subjects
+
+id: UUID (PK)
+name: STRING
+icon: STRING
+color: STRING
+grade_level: INTEGER[]
+teacher_id: UUID (FK -> teachers)
+created_at: TIMESTAMP
+
+Tabela: questions
+
+id: UUID (PK)
+subject_id: UUID (FK -> subjects)
+teacher_id: UUID (FK -> teachers)
+question_text: TEXT
+options: JSON []
+correct_answer: INTEGER
+difficulty: ENUM ('easy', 'medium', 'hard')
+points: INTEGER
+explanation: TEXT
+grade_level: INTEGER
+tags: STRING[]
+created_at: TIMESTAMP
+approved: BOOLEAN
+
+Tabela: quizzes
+
+id: UUID (PK)
+title: STRING
+description: TEXT
+subject_id: UUID (FK -> subjects)
+teacher_id: UUID (FK -> teachers)
+question_ids: UUID[] (FK -> questions)
+time_limit: INTEGER (minutes)
+grade_level: INTEGER
+type: ENUM ('practice', 'test', 'exam')
+available_from: TIMESTAMP
+available_until: TIMESTAMP
+created_at: TIMESTAMP
+
+Tabela: quiz_attempts
+
+id: UUID (PK)
+quiz_id: UUID (FK -> quizzes)
+student_id: UUID (FK -> students)
+score: INTEGER
+total_questions: INTEGER
+correct_answers: INTEGER
+time_spent: INTEGER (seconds)
+answers: JSON [{question_id, selected_answer, is_correct}]
+completed_at: TIMESTAMP
+
+Tabela: study_sessions
+
+id: UUID (PK)
+student_id: UUID (FK -> students)
+subject_id: UUID (FK -> subjects)
+started_at: TIMESTAMP
+ended_at: TIMESTAMP
+duration: INTEGER (seconds)
+activities: JSON []
+
+Tabela: achievements
+
+id: UUID (PK)
+name: STRING
+description: TEXT
+icon: STRING
+points_required: INTEGER
+condition_type: ENUM ('points', 'streak', 'quizzes', 'time')
+condition_value: INTEGER
+
+Tabela: student_achievements
+
+id: UUID (PK)
+student_id: UUID (FK -> students)
+achievement_id: UUID (FK -> achievements)
+unlocked_at: TIMESTAMP
+
+Tabela: study_plans
+
+id: UUID (PK)
+student_id: UUID (FK -> students)
+created_by: UUID (FK -> users) // pai ou aluno
+subject_id: UUID (FK -> subjects)
+goal_description: TEXT
+daily_time_goal: INTEGER (minutes)
+weekly_quizzes_goal: INTEGER
+start_date: DATE
+end_date: DATE
+status: ENUM ('active', 'completed', 'cancelled')
+
+Tabela: notifications
+
+id: UUID (PK)
+user_id: UUID (FK -> users)
+type: STRING
+title: STRING
+message: TEXT
+link: STRING
+read: BOOLEAN
+created_at: TIMESTAMP
+
+🔐 Sistema de Autenticação
+Fluxo de Login
+
+Usuário faz login com email/senha
+Backend valida credenciais
+Retorna JWT token + dados do usuário (role, id, name)
+Frontend armazena token e redireciona baseado no role:
+
+student → Portal do Aluno
+parent → Portal dos Pais
+teacher → Portal do Professor
+
+
+
+Permissões por Role
+Student:
+
+Fazer quizzes
+Ver próprio progresso
+Gerenciar plano de estudos próprio
+Ver conquistas
+
+Parent:
+
+Ver dados dos filhos vinculados
+Criar/editar metas de estudo
+Receber relatórios semanais
+Enviar mensagens para professores
+
+Teacher:
+
+Criar/editar/deletar questões
+Criar quizzes e provas
+Ver relatórios de todos alunos
+Aprovar questões de outros professores
+Enviar notificações
+
+
+📱 Portal do Aluno - Funcionalidades
+Tela Inicial (Dashboard)
+
+Cards de matérias disponíveis
+Estatísticas: pontos totais, nível, tempo de estudo
+Próximas atividades/provas
+Conquistas recentes
+Streak de dias consecutivos
+
+Tela de Quiz
+
+Seleção de matéria e dificuldade
+Cronômetro
+Barra de progresso
+Sistema de pontos com multiplicador de streak
+Feedback imediato (certo/errado + explicação)
+Tela de resultados detalhada
+
+Meu Progresso
+
+Gráficos de desempenho por matéria
+Histórico de quizzes
+Tempo de estudo por dia/semana
+Ranking (opcional)
+
+Conquistas
+
+Grid de medalhas/badges
+Progresso para próximas conquistas
+Compartilhamento social
+
+Plano de Estudos
+
+Calendário semanal
+Metas diárias/semanais
+Checkbox de tarefas concluídas
+
+
+👨‍👩‍👧 Portal dos Pais - Funcionalidades
+Dashboard
+
+Seletor de filho (se tiver mais de um)
+Resumo semanal de atividades
+Alertas: metas não cumpridas, provas próximas
+Comparativo: semana atual vs anterior
+
+Relatórios Detalhados
+
+Desempenho por Matéria: gráficos de radar, barras
+Tempo de Estudo: calendário de calor (heatmap)
+Evolução: gráfico de linha ao longo do tempo
+Pontos Fortes e Fracos: análise automática
+
+Controle Parental
+
+Definir metas de estudo (tempo mínimo diário)
+Limitar tempo de uso por dia
+Bloquear/desbloquear matérias
+Configurar notificações
+
+Comunicação
+
+Chat com professores
+Notificações de novos quizzes/provas
+Relatórios semanais por email
+
+Planejamento
+
+Criar cronograma de estudos
+Definir horários fixos
+Agendar sessões de revisão
+
+
+👨‍🏫 Portal do Professor - Funcionalidades
+Dashboard
+
+Estatísticas gerais: alunos ativos, quizzes criados
+Últimas atividades dos alunos
+Questões pendentes de aprovação
+Calendário de provas
+
+Gestão de Questões
+
+Criar Nova Questão:
+
+Campo de texto para pergunta
+4 opções de resposta
+Selecionar resposta correta
+Adicionar explicação detalhada
+Tags e palavras-chave
+Dificuldade (fácil/médio/difícil)
+Série/ano
+Upload de imagens (opcional)
+
+
+Biblioteca de Questões:
+
+Filtros: matéria, dificuldade, série, tags
+Busca por texto
+Editar/Excluir
+Duplicar questão
+Estatísticas: taxa de acerto, uso
+
+
+
+Criar Quizzes/Provas
+
+Modo Rápido: selecionar X questões aleatórias
+Modo Avançado:
+
+Selecionar questões manualmente
+Definir ordem
+Configurar tempo limite
+Escolher tipo (prática/teste/prova)
+Agendar disponibilidade
+Peso de nota (para provas)
+
+
+
+Importação em Massa
+
+Upload de CSV/Excel com questões
+Template para download
+Validação automática
+
+Relatórios
+
+Desempenho por turma
+Questões com menor taxa de acerto
+Alunos que precisam de atenção
+Comparativo entre turmas
+Exportar para PDF/Excel
+
+Gerenciamento de Alunos
+
+Lista de alunos por série
+Perfil individual: histórico, gráficos
+Enviar quizzes personalizados
+Adicionar comentários/observações
+
+🔌 API Endpoints
+
+Autenticação
+
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
+POST   /api/auth/forgot-password
+POST   /api/auth/reset-password
+
+Alunos
+
+GET    /api/students/:id
+PUT    /api/students/:id
+GET    /api/students/:id/stats
+GET    /api/students/:id/achievements
+GET    /api/students/:id/history
+POST   /api/students/:id/study-session/start
+POST   /api/students/:id/study-session/end
+
+Pais
+
+GET    /api/parents/:id/children
+POST   /api/parents/:id/children/:studentId/goals
+GET    /api/parents/:id/children/:studentId/reports
+PUT    /api/parents/:id/children/:studentId/settings
+
+Professores
+
+GET    /api/teachers/:id/subjects
+POST   /api/teachers/:id/questions
+PUT    /api/teachers/:id/questions/:questionId
+DELETE /api/teachers/:id/questions/:questionId
+GET    /api/teachers/:id/questions
+POST   /api/teachers/:id/quizzes
+GET    /api/teachers/:id/quizzes
+GET    /api/teachers/:id/students
+GET    /api/teachers/:id/reports
+POST   /api/teachers/:id/bulk-import
+
+Questões e Quizzes
+
+GET    /api/subjects
+GET    /api/subjects/:id/questions
+GET    /api/questions/:id
+POST   /api/quizzes/:id/attempt
+GET    /api/quizzes/:id/results/:attemptId
+GET    /api/quizzes/available (para alunos)
+
+Conquistas
+
+GET    /api/achievements
+POST   /api/students/:id/achievements/check
+
+Notificações
+
+GET    /api/notifications
+PUT    /api/notifications/:id/read
+POST   /api/notifications/mark-all-read
+
+📊 Recursos de Gamificação
+Sistema de Pontos
+
+Quiz fácil: 10 pontos por questão
+Quiz médio: 15 pontos por questão
+Quiz difícil: 25 pontos por questão
+Bônus de streak: +5 pontos por acerto consecutivo
+Bônus de velocidade: +10 pontos se responder em menos de 10s
+
+Níveis
+
+Nível 1: 0-100 pontos
+Nível 2: 101-300 pontos
+Nível 3: 301-600 pontos
+Nível 4: 601-1000 pontos
+Nível 5+: +500 pontos por nível
+
+Conquistas (Exemplos)
+🎯 Iniciante: Complete seu primeiro quiz
+🔥 Sequência de 7: Estude 7 dias seguidos
+⭐ Perfeccionista: Acerte 100% em um quiz
+📚 Estudioso: Complete 50 quizzes
+🏆 Mestre: Alcance nível 10
+⚡ Velocista: Responda 10 questões em menos de 5s cada
+🌟 Dedicado: Estude 10 horas no total
+Ranking (Opcional)
+
+Semanal: top 10 da semana
+Mensal: top 10 do mês
+Por matéria: melhor em cada disciplina
+Privacidade: pais podem desabilitar
+
+
+🎨 Design e UX
+Paleta de Cores por Matéria
+
+Matemática: Azul (#3B82F6)
+Português: Verde (#10B981)
+História: Amarelo (#F59E0B)
+Geografia: Roxo (#8B5CF6)
+Ciências: Teal (#14B8A6)
+Inglês: Rosa (#EC4899)
+
+Animações
+
+Feedback visual ao acertar (confete/estrelas)
+Transições suaves entre telas
+Loading states elegantes
+Micro-interações nos botões
+
+Responsividade
+
+Mobile-first design
+Tablet otimizado para estudar
+Desktop com mais dados visuais
+
+
+🚀 Roadmap de Implementação
+Fase 1: MVP (4-6 semanas)
+
+Setup do projeto e banco de dados
+Sistema de autenticação
+Portal do Aluno básico (quiz simples)
+Criar 50 questões iniciais (10 por matéria)
+Sistema de pontuação básico
+
+Fase 2: Portais Completos (4-6 semanas)
+
+Portal dos Pais com relatórios
+Portal do Professor com CRUD de questões
+Sistema de quizzes programados
+Notificações em tempo real
+200+ questões no banco
+
+Fase 3: Gamificação Avançada (3-4 semanas)
+
+Sistema completo de conquistas
+Ranking e competições
+Plano de estudos inteligente
+Recomendações personalizadas
+
+Fase 4: Features Premium (ongoing)
+
+IA para gerar questões
+Análise preditiva de desempenho
+Integração com sistemas escolares
+App mobile nativo
+Modo offline
+
+
+🛠️ Como Implementar nas Plataformas
+Para Cursor/VS Code
+
+Clone o repositório base
+Configure variáveis de ambiente (.env)
+Instale dependências: npm install
+Rode migrações do banco: npm run migrate
+Inicie dev server: npm run dev
+
+Para Lovable/v0/Bolt
+
+Use o código React fornecido como base
+Conecte com Supabase para backend rápido
+Configure autenticação do Supabase
+Implemente as tabelas no SQL Editor
+Deploy automático
+
+Para Replit
+
+Fork o template Node.js + React
+Configure Replit Database ou PostgreSQL
+Use secrets para variáveis sensíveis
+Deploy via Replit Deployments
+
+📝 Exemplo de .env
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/eduquiz
+
+# JWT
+JWT_SECRET=seu_secret_super_seguro_aqui
+JWT_EXPIRES_IN=7d
+
+# Email (para notificações)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu_email@gmail.com
+SMTP_PASS=sua_senha
+
+# Frontend URL
+FRONTEND_URL=http://localhost:3000
+
+# AWS S3 (para imagens, opcional)
+AWS_ACCESS_KEY=
+AWS_SECRET_KEY=
+AWS_BUCKET_NAME=
+
+🔒 Segurança
+
+Senhas hasheadas com bcrypt (salt rounds: 10)
+JWT tokens com expiração
+Rate limiting nas APIs (100 req/min)
+Validação de inputs com Zod/Joi
+CORS configurado corretamente
+Sanitização de dados do usuário
+HTTPS obrigatório em produção
+
+📚 Bibliotecas Recomendadas
+Frontend:
+
+react-router-dom - Roteamento
+axios ou tanstack-query - Requisições
+recharts - Gráficos
+date-fns - Manipulação de datas
+react-hook-form + zod - Formulários
+lucide-react - Ícones
+sonner - Toasts/Notificações
+framer-motion - Animações
+
+Backend:
+
+express - Framework web
+prisma - ORM
+jsonwebtoken - JWT
+bcrypt - Hash de senhas
+express-validator - Validação
+nodemailer - Envio de emails
+express-rate-limit - Rate limiting
+
+
+💡 Dicas Importantes
+
+Comece simples: Implemente o MVP primeiro, depois expanda
+Dados de teste: Crie um script de seed com questões e usuários fake
+Documentação: Use Swagger/OpenAPI para documentar APIs
+Testes: Implemente testes unitários nos endpoints críticos
+Backup: Configure backup automático do banco de dados
+Monitoramento: Use Sentry ou similar para tracking de erros
+Analytics: Implemente tracking de uso (sem violar privacidade)
+
+
+🎯 Próximos Passos
+
+Definir qual plataforma você vai usar (recomendo Lovable + Supabase para início rápido)
+Criar conta no Supabase e configurar o projeto
+Implementar o schema do banco de dados
+Criar os 3 componentes React para cada portal
+Implementar autenticação
+Adicionar questões iniciais
+Testar com suas filhas e coletar feedback!

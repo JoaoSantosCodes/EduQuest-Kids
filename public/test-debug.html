@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Debug - AuthCallback</title>
+</head>
+<body>
+    <h1>Teste de Debug</h1>
+    <p>Abra o console (F12) e verifique se os logs aparecem.</p>
+    <script>
+        console.log('[DEBUG] ============================================');
+        console.log('[DEBUG] TESTE: Arquivo test-debug.html carregado');
+        console.log('[DEBUG] ============================================');
+        
+        // Verificar se estamos na rota de callback
+        if (window.location.pathname === '/auth/callback') {
+            console.log('[DEBUG] ✅ Rota de callback detectada!');
+            console.log('[DEBUG] Hash da URL:', window.location.hash);
+            console.log('[DEBUG] Tokens presentes:', window.location.hash.includes('access_token'));
+        } else {
+            console.log('[DEBUG] ⚠️ Não estamos na rota de callback');
+            console.log('[DEBUG] Rota atual:', window.location.pathname);
+        }
+    </script>
+</body>
+</html>
+

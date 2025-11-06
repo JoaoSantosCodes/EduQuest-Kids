@@ -1,0 +1,337 @@
+import React, { useState, useEffect } from 'react';
+import { Trophy, Clock, BookOpen, Star, Play, Pause, RotateCcw, ChevronRight, Award } from 'lucide-react';
+
+export default function EduQuizApp() {
+  const [currentView, setCurrentView] = useState('home');
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [score, setScore] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [studyTime, setStudyTime] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [answeredQuestions, setAnsweredQuestions] = useState([]);
+  const [level, setLevel] = useState(1);
+
+  const subjects = [
+    { id: 'mat', name: 'Matemática', color: 'bg-blue-500', icon: '📐', questions: 8 },
+    { id: 'port', name: 'Português', color: 'bg-green-500', icon: '📚', questions: 8 },
+    { id: 'hist', name: 'História', color: 'bg-yellow-500', icon: '🏛️', questions: 6 },
+    { id: 'geo', name: 'Geografia', color: 'bg-purple-500', icon: '🌍', questions: 6 },
+    { id: 'cien', name: 'Ciências', color: 'bg-teal-500', icon: '🔬', questions: 8 },
+    { id: 'ing', name: 'Inglês', color: 'bg-pink-500', icon: '🗣️', questions: 6 }
+  ];
+
+  const quizData = {
+    mat: [
+      { question: 'Quanto é 15% de 200?', options: ['20', '30', '40', '50'], correct: 1 },
+      { question: 'Qual é o resultado de 8² ?', options: ['16', '64', '32', '72'], correct: 1 },
+      { question: 'Quanto é 3/4 de 100?', options: ['75', '50', '25', '80'], correct: 0 },
+      { question: 'Qual é a área de um quadrado de lado 7cm?', options: ['14cm²', '28cm²', '49cm²', '21cm²'], correct: 2 },
+      { question: 'Quanto é 12 × 15?', options: ['150', '180', '200', '170'], correct: 1 },
+      { question: 'Qual é o próximo número primo após 7?', options: ['9', '10', '11', '13'], correct: 2 },
+      { question: 'Quanto vale X em: 2X + 6 = 18?', options: ['6', '8', '10', '12'], correct: 0 },
+      { question: 'Qual é o perímetro de um retângulo 5cm × 8cm?', options: ['13cm', '26cm', '40cm', '20cm'], correct: 1 }
+    ],
+    port: [
+      { question: 'Qual é o plural de "cidadão"?', options: ['Cidadões', 'Cidadãos', 'Cidadães', 'Cidadans'], correct: 1 },
+      { question: 'O que é um substantivo coletivo?', options: ['Muitos nomes', 'Nome de grupo', 'Nome próprio', 'Nome composto'], correct: 1 },
+      { question: 'Qual é o sujeito em: "Maria comeu o bolo"?', options: ['Comeu', 'Maria', 'O bolo', 'Não tem'], correct: 1 },
+      { question: 'Qual palavra está escrita corretamente?', options: ['Excessão', 'Exceção', 'Exeção', 'Escesão'], correct: 1 },
+      { question: 'O que é uma metáfora?', options: ['Comparação direta', 'Comparação indireta', 'Repetição', 'Exagero'], correct: 1 },
+      { question: 'Qual é o feminino de "réu"?', options: ['Réia', 'Reia', 'Réu', 'Ré'], correct: 3 },
+      { question: 'Qual é o sinônimo de "feliz"?', options: ['Triste', 'Alegre', 'Nervoso', 'Calmo'], correct: 1 },
+      { question: 'O que é um adjetivo?', options: ['Ação', 'Característica', 'Objeto', 'Lugar'], correct: 1 }
+    ],
+    hist: [
+      { question: 'Quem descobriu o Brasil?', options: ['Colombo', 'Cabral', 'Vasco da Gama', 'Magellan'], correct: 1 },
+      { question: 'Em que ano foi a Independência do Brasil?', options: ['1500', '1822', '1889', '1930'], correct: 1 },
+      { question: 'Quem foi D. Pedro I?', options: ['Rei', 'Imperador', 'Presidente', 'Príncipe'], correct: 1 },
+      { question: 'O que foi a Proclamação da República?', options: ['Fim da monarquia', 'Início da monarquia', 'Guerra', 'Tratado'], correct: 0 },
+      { question: 'Qual foi o primeiro presidente do Brasil?', options: ['Getúlio Vargas', 'Deodoro da Fonseca', 'JK', 'D. Pedro II'], correct: 1 },
+      { question: 'Quando acabou a escravidão no Brasil?', options: ['1822', '1850', '1888', '1889'], correct: 2 }
+    ],
+    geo: [
+      { question: 'Qual é a capital do Brasil?', options: ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador'], correct: 2 },
+      { question: 'Quantos estados tem o Brasil?', options: ['24', '25', '26', '27'], correct: 3 },
+      { question: 'Qual é o maior bioma brasileiro?', options: ['Cerrado', 'Amazônia', 'Mata Atlântica', 'Caatinga'], correct: 1 },
+      { question: 'Qual é o rio mais extenso do Brasil?', options: ['São Francisco', 'Paraná', 'Amazonas', 'Tietê'], correct: 2 },
+      { question: 'Em qual continente fica o Brasil?', options: ['África', 'América', 'Europa', 'Ásia'], correct: 1 },
+      { question: 'Qual região tem mais estados?', options: ['Norte', 'Nordeste', 'Sul', 'Sudeste'], correct: 1 }
+    ],
+    cien: [
+      { question: 'Qual é a fórmula da água?', options: ['H2O', 'CO2', 'O2', 'H2'], correct: 0 },
+      { question: 'Quantos ossos tem o corpo humano adulto?', options: ['106', '206', '306', '406'], correct: 1 },
+      { question: 'O que é fotossíntese?', options: ['Respiração', 'Produção de alimento', 'Reprodução', 'Digestão'], correct: 1 },
+      { question: 'Qual planeta é conhecido como vermelho?', options: ['Vênus', 'Júpiter', 'Marte', 'Saturno'], correct: 2 },
+      { question: 'O que são células?', options: ['Órgãos', 'Unidades básicas da vida', 'Tecidos', 'Sistemas'], correct: 1 },
+      { question: 'Qual é a velocidade da luz?', options: ['200.000 km/s', '300.000 km/s', '400.000 km/s', '100.000 km/s'], correct: 1 },
+      { question: 'O que causa as estações do ano?', options: ['Distância do Sol', 'Inclinação da Terra', 'Lua', 'Vento'], correct: 1 },
+      { question: 'Qual gás respiramos?', options: ['CO2', 'N2', 'O2', 'H2'], correct: 2 }
+    ],
+    ing: [
+      { question: 'Como se diz "livro" em inglês?', options: ['Book', 'Cook', 'Look', 'Hook'], correct: 0 },
+      { question: 'Qual é o plural de "child"?', options: ['Childs', 'Children', 'Childes', 'Child'], correct: 1 },
+      { question: 'O que significa "happy"?', options: ['Triste', 'Feliz', 'Bravo', 'Cansado'], correct: 1 },
+      { question: 'Como se diz "bom dia"?', options: ['Good night', 'Good morning', 'Good afternoon', 'Good bye'], correct: 1 },
+      { question: 'Qual é o verbo "to be" no passado (I)?', options: ['Am', 'Was', 'Were', 'Be'], correct: 1 },
+      { question: 'O que é "school"?', options: ['Casa', 'Escola', 'Igreja', 'Mercado'], correct: 1 }
+    ]
+  };
+
+  useEffect(() => {
+    let interval;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setStudyTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleAnswer = (selectedIndex) => {
+    const isCorrect = selectedIndex === quizData[selectedSubject.id][currentQuestion].correct;
+    
+    if (isCorrect) {
+      const points = 10 + (streak * 5);
+      setScore(score + points);
+      setTotalScore(totalScore + points);
+      setStreak(streak + 1);
+    } else {
+      setStreak(0);
+    }
+
+    setAnsweredQuestions([...answeredQuestions, { correct: isCorrect }]);
+
+    if (currentQuestion < quizData[selectedSubject.id].length - 1) {
+      setTimeout(() => setCurrentQuestion(currentQuestion + 1), 800);
+    } else {
+      setTimeout(() => {
+        setCurrentView('results');
+        setIsTimerRunning(false);
+      }, 800);
+    }
+  };
+
+  const startQuiz = (subject) => {
+    setSelectedSubject(subject);
+    setCurrentQuestion(0);
+    setScore(0);
+    setStreak(0);
+    setAnsweredQuestions([]);
+    setCurrentView('quiz');
+    setIsTimerRunning(true);
+  };
+
+  const resetQuiz = () => {
+    setCurrentView('home');
+    setSelectedSubject(null);
+  };
+
+  if (currentView === 'home') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 p-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-3xl font-bold text-purple-600">EduQuiz</h1>
+                <p className="text-gray-600">Aprenda brincando! 🎮</p>
+              </div>
+              <div className="text-right">
+                <div className="flex items-center gap-2 text-2xl font-bold text-orange-500">
+                  <Trophy className="w-8 h-8" />
+                  {totalScore}
+                </div>
+                <div className="text-sm text-gray-600">Pontos Totais</div>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center">
+                <Clock className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+                <div className="text-2xl font-bold text-blue-600">{formatTime(studyTime)}</div>
+                <div className="text-xs text-blue-600">Tempo de Estudo</div>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center">
+                <Star className="w-6 h-6 mx-auto mb-2 text-green-600" />
+                <div className="text-2xl font-bold text-green-600">{level}</div>
+                <div className="text-xs text-green-600">Nível</div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center">
+                <Award className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+                <div className="text-2xl font-bold text-purple-600">{Math.floor(totalScore / 100)}</div>
+                <div className="text-xs text-purple-600">Conquistas</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Subjects Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            {subjects.map((subject) => (
+              <button
+                key={subject.id}
+                onClick={() => startQuiz(subject)}
+                className={`${subject.color} hover:scale-105 transition-transform rounded-2xl shadow-xl p-6 text-white`}
+              >
+                <div className="text-5xl mb-3">{subject.icon}</div>
+                <h3 className="text-xl font-bold mb-2">{subject.name}</h3>
+                <div className="flex items-center justify-between text-sm opacity-90">
+                  <span>{subject.questions} questões</span>
+                  <ChevronRight className="w-5 h-5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'quiz') {
+    const question = quizData[selectedSubject.id][currentQuestion];
+    const progress = ((currentQuestion + 1) / quizData[selectedSubject.id].length) * 100;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-4">
+        <div className="max-w-2xl mx-auto">
+          {/* Quiz Header */}
+          <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`${selectedSubject.color} rounded-xl p-3 text-3xl`}>
+                  {selectedSubject.icon}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">{selectedSubject.name}</h2>
+                  <p className="text-sm text-gray-600">Questão {currentQuestion + 1}/{quizData[selectedSubject.id].length}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-orange-500">{score}</div>
+                <div className="text-xs text-gray-600">Pontos</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="bg-gray-200 rounded-full h-3 mb-4">
+              <div 
+                className="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+
+            {/* Streak */}
+            {streak > 0 && (
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl p-3 mb-4 text-white text-center font-bold">
+                🔥 Sequência de {streak} acertos! +{streak * 5} pontos bônus
+              </div>
+            )}
+
+            {/* Timer */}
+            <div className="flex items-center justify-center gap-2 text-gray-600">
+              <Clock className="w-5 h-5" />
+              <span className="font-mono text-lg">{formatTime(studyTime)}</span>
+            </div>
+          </div>
+
+          {/* Question Card */}
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+              {question.question}
+            </h3>
+
+            <div className="space-y-3">
+              {question.options.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAnswer(index)}
+                  className="w-full bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-2 border-purple-200 rounded-xl p-4 text-left text-lg font-semibold text-gray-800 transition-all hover:scale-105 hover:shadow-lg"
+                >
+                  <span className="inline-block w-8 h-8 bg-purple-500 text-white rounded-full text-center leading-8 mr-3">
+                    {String.fromCharCode(65 + index)}
+                  </span>
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'results') {
+    const correctAnswers = answeredQuestions.filter(q => q.correct).length;
+    const percentage = Math.round((correctAnswers / answeredQuestions.length) * 100);
+    const newLevel = Math.floor(totalScore / 100) + 1;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-500 via-teal-500 to-blue-500 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center">
+          <div className="text-6xl mb-4">
+            {percentage >= 80 ? '🏆' : percentage >= 60 ? '🌟' : '💪'}
+          </div>
+          
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+            {percentage >= 80 ? 'Incrível!' : percentage >= 60 ? 'Muito Bem!' : 'Continue Tentando!'}
+          </h2>
+          
+          <p className="text-gray-600 mb-6">
+            Você completou o quiz de {selectedSubject.name}
+          </p>
+
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 mb-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-3xl font-bold text-purple-600">{correctAnswers}/{answeredQuestions.length}</div>
+                <div className="text-sm text-gray-600">Acertos</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-orange-500">{score}</div>
+                <div className="text-sm text-gray-600">Pontos</div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-purple-200">
+              <div className="text-4xl font-bold text-green-600">{percentage}%</div>
+              <div className="text-sm text-gray-600">Aproveitamento</div>
+            </div>
+          </div>
+
+          {newLevel > level && (
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl p-4 mb-6 text-white">
+              <div className="text-2xl font-bold">🎉 Subiu de Nível!</div>
+              <div className="text-lg">Agora você está no nível {newLevel}</div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <button
+              onClick={() => startQuiz(selectedSubject)}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-4 rounded-xl transition-all hover:scale-105"
+            >
+              <RotateCcw className="w-5 h-5 inline mr-2" />
+              Jogar Novamente
+            </button>
+            
+            <button
+              onClick={resetQuiz}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 rounded-xl transition-all"
+            >
+              Voltar ao Início
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}

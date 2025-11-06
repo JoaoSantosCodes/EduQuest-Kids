@@ -1,0 +1,618 @@
+import React, { useState } from 'react';
+import { Plus, Edit, Trash2, Search, Filter, BookOpen, Users, BarChart3, FileText, Upload, Download, Eye, Check, X, Clock, Award, MessageSquare, Settings, ChevronDown, Calendar } from 'lucide-react';
+
+export default function TeacherPortal() {
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDifficulty, setFilterDifficulty] = useState('all');
+  const [filterGrade, setFilterGrade] = useState('all');
+
+  // Dados simulados do professor
+  const teacherData = {
+    name: 'Prof. Carlos Silva',
+    subjects: ['Matemática', 'Física'],
+    school: 'Colégio Exemplo',
+    studentsCount: 87,
+    questionsCreated: 234,
+    quizzesCreated: 45
+  };
+
+  // Matérias
+  const subjects = [
+    { id: 'mat', name: 'Matemática', color: 'bg-blue-500', studentsCount: 45 },
+    { id: 'fis', name: 'Física', color: 'bg-purple-500', studentsCount: 42 },
+    { id: 'port', name: 'Português', color: 'bg-green-500', studentsCount: 0 },
+    { id: 'hist', name: 'História', color: 'bg-yellow-500', studentsCount: 0 }
+  ];
+
+  // Questões cadastradas (viriam do backend)
+  const [questions, setQuestions] = useState([
+    {
+      id: 1,
+      subject: 'Matemática',
+      question: 'Qual é o valor de X na equação 2X + 5 = 15?',
+      difficulty: 'medium',
+      grade: 7,
+      usageCount: 12,
+      avgCorrect: 78,
+      tags: ['álgebra', 'equações'],
+      approved: true
+    },
+    {
+      id: 2,
+      subject: 'Matemática',
+      question: 'Calcule a área de um círculo com raio de 5cm',
+      difficulty: 'easy',
+      grade: 6,
+      usageCount: 25,
+      avgCorrect: 85,
+      tags: ['geometria', 'círculo'],
+      approved: true
+    },
+    {
+      id: 3,
+      subject: 'Física',
+      question: 'Qual é a fórmula da velocidade média?',
+      difficulty: 'easy',
+      grade: 7,
+      usageCount: 8,
+      avgCorrect: 92,
+      tags: ['cinemática', 'movimento'],
+      approved: false
+    }
+  ]);
+
+  // Quizzes criados
+  const quizzes = [
+    {
+      id: 1,
+      title: 'Revisão de Álgebra Básica',
+      subject: 'Matemática',
+      grade: 7,
+      questions: 10,
+      timeLimit: 20,
+      type: 'practice',
+      attempts: 34,
+      avgScore: 82,
+      status: 'active',
+      availableFrom: '2025-11-01',
+      availableUntil: '2025-11-30'
+    },
+    {
+      id: 2,
+      title: 'Prova Bimestral - Equações',
+      subject: 'Matemática',
+      grade: 7,
+      questions: 20,
+      timeLimit: 45,
+      type: 'exam',
+      attempts: 42,
+      avgScore: 75,
+      status: 'scheduled',
+      availableFrom: '2025-11-15',
+      availableUntil: '2025-11-15'
+    }
+  ];
+
+  // Alunos por desempenho
+  const students = [
+    { name: 'Maria Silva', grade: 7, avgScore: 95, quizzes: 18, trend: 'up' },
+    { name: 'João Santos', grade: 7, avgScore: 88, quizzes: 15, trend: 'up' },
+    { name: 'Ana Costa', grade: 7, avgScore: 72, quizzes: 12, trend: 'down' },
+    { name: 'Pedro Oliveira', grade: 6, avgScore: 65, quizzes: 8, trend: 'down' }
+  ];
+
+  // Estatísticas do dashboard
+  const stats = {
+    activeStudents: 87,
+    avgClassScore: 78,
+    questionsCreated: 234,
+    quizzesActive: 8,
+    weeklyProgress: [
+      { day: 'Seg', attempts: 45, avgScore: 75 },
+      { day: 'Ter', attempts: 38, avgScore: 78 },
+      { day: 'Qua', attempts: 52, avgScore: 82 },
+      { day: 'Qui', attempts: 41, avgScore: 76 },
+      { day: 'Sex', attempts: 35, avgScore: 80 },
+      { day: 'Sáb', attempts: 12, avgScore: 85 },
+      { day: 'Dom', attempts: 8, avgScore: 88 }
+    ]
+  };
+
+  // Form para criar questão
+  const [newQuestion, setNewQuestion] = useState({
+    subject: '',
+    question: '',
+    options: ['', '', '', ''],
+    correct: 0,
+    explanation: '',
+    difficulty: 'medium',
+    grade: 7,
+    tags: []
+  });
+
+  const handleCreateQuestion = () => {
+    const question = {
+      id: questions.length + 1,
+      subject: newQuestion.subject,
+      question: newQuestion.question,
+      difficulty: newQuestion.difficulty,
+      grade: newQuestion.grade,
+      usageCount: 0,
+      avgCorrect: 0,
+      tags: newQuestion.tags,
+      approved: false
+    };
+    setQuestions([...questions, question]);
+    setShowCreateModal(false);
+    setNewQuestion({
+      subject: '',
+      question: '',
+      options: ['', '', '', ''],
+      correct: 0,
+      explanation: '',
+      difficulty: 'medium',
+      grade: 7,
+      tags: []
+    });
+  };
+
+  const filteredQuestions = questions.filter(q => {
+    const matchSearch = q.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       q.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchDifficulty = filterDifficulty === 'all' || q.difficulty === filterDifficulty;
+    const matchGrade = filterGrade === 'all' || q.grade.toString() === filterGrade;
+    const matchSubject = selectedSubject === 'all' || q.subject === selectedSubject;
+    
+    return matchSearch && matchDifficulty && matchGrade && matchSubject;
+  });
+
+  // Dashboard View
+  const DashboardView = () => (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+          <Users className="w-8 h-8 mb-2" />
+          <div className="text-3xl font-bold mb-1">{stats.activeStudents}</div>
+          <div className="text-blue-100">Alunos Ativos</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
+          <BarChart3 className="w-8 h-8 mb-2" />
+          <div className="text-3xl font-bold mb-1">{stats.avgClassScore}%</div>
+          <div className="text-green-100">Média da Turma</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+          <BookOpen className="w-8 h-8 mb-2" />
+          <div className="text-3xl font-bold mb-1">{stats.questionsCreated}</div>
+          <div className="text-purple-100">Questões Criadas</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white">
+          <FileText className="w-8 h-8 mb-2" />
+          <div className="text-3xl font-bold mb-1">{stats.quizzesActive}</div>
+          <div className="text-orange-100">Quizzes Ativos</div>
+        </div>
+      </div>
+
+      {/* Atividade Semanal */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-lg font-bold mb-4">Atividade Semanal da Turma</h3>
+        <div className="flex items-end justify-between h-48 gap-2">
+          {stats.weeklyProgress.map((day, idx) => (
+            <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+              <div className="text-xs text-gray-600 font-medium">{day.avgScore}%</div>
+              <div
+                className="w-full bg-gradient-to-t from-purple-500 to-purple-300 rounded-t-lg transition-all hover:from-purple-600 hover:to-purple-400"
+                style={{ height: `${(day.attempts / 52) * 100}%`, minHeight: '20px' }}
+                title={`${day.attempts} tentativas`}
+              ></div>
+              <div className="text-sm font-medium text-gray-700">{day.day}</div>
+              <div className="text-xs text-gray-500">{day.attempts}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Alunos que Precisam de Atenção */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold">Alunos que Precisam de Atenção</h3>
+          <button className="text-purple-600 hover:text-purple-700 font-medium text-sm">
+            Ver Todos
+          </button>
+        </div>
+        <div className="space-y-3">
+          {students.filter(s => s.avgScore < 75).map((student, idx) => (
+            <div key={idx} className="flex items-center justify-between p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-200 rounded-full flex items-center justify-center font-bold text-orange-700">
+                  {student.name[0]}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-800">{student.name}</div>
+                  <div className="text-sm text-gray-600">{student.grade}ª série · {student.quizzes} quizzes</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-orange-600">{student.avgScore}%</div>
+                <div className="text-xs text-gray-500">Média</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quizzes Recentes */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold">Quizzes Recentes</h3>
+          <button
+            onClick={() => setCurrentView('quizzes')}
+            className="text-purple-600 hover:text-purple-700 font-medium text-sm"
+          >
+            Ver Todos
+          </button>
+        </div>
+        <div className="space-y-3">
+          {quizzes.slice(0, 3).map((quiz) => (
+            <div key={quiz.id} className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-purple-300 transition-all">
+              <div className="flex-1">
+                <div className="font-semibold text-gray-800">{quiz.title}</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  {quiz.subject} · {quiz.grade}ª série · {quiz.questions} questões · {quiz.attempts} tentativas
+                </div>
+              </div>
+              <div className="text-right">
+                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  quiz.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {quiz.status === 'active' ? 'Ativo' : 'Agendado'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Média: {quiz.avgScore}%</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Questions Library View
+  const QuestionsView = () => (
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Nova Questão
+          </button>
+
+          <button className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-all">
+            <Upload className="w-5 h-5" />
+            Importar CSV
+          </button>
+
+          <button className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-all">
+            <Download className="w-5 h-5" />
+            Exportar
+          </button>
+
+          <div className="ml-auto text-lg font-bold text-gray-700">
+            {filteredQuestions.length} questões
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar questões ou tags..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+            />
+          </div>
+
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+          >
+            <option value="all">Todas as Matérias</option>
+            <option value="Matemática">Matemática</option>
+            <option value="Física">Física</option>
+            <option value="Português">Português</option>
+            <option value="História">História</option>
+          </select>
+
+          <select
+            value={filterDifficulty}
+            onChange={(e) => setFilterDifficulty(e.target.value)}
+            className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+          >
+            <option value="all">Todas Dificuldades</option>
+            <option value="easy">Fácil</option>
+            <option value="medium">Médio</option>
+            <option value="hard">Difícil</option>
+          </select>
+
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
+            className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+          >
+            <option value="all">Todas as Séries</option>
+            <option value="6">6ª série</option>
+            <option value="7">7ª série</option>
+            <option value="8">8ª série</option>
+            <option value="9">9ª série</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Questions List */}
+      <div className="space-y-4">
+        {filteredQuestions.map((q) => (
+          <div key={q.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    q.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
+                    q.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {q.difficulty === 'easy' ? 'Fácil' : q.difficulty === 'medium' ? 'Médio' : 'Difícil'}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    {q.grade}ª série
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                    {q.subject}
+                  </span>
+                  {!q.approved && (
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                      Pendente Aprovação
+                    </span>
+                  )}
+                </div>
+                
+                <h4 className="text-lg font-semibold text-gray-800 mb-2">{q.question}</h4>
+                
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {q.tags.map((tag, idx) => (
+                    <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-6 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <Eye className="w-4 h-4" />
+                    Usada {q.usageCount}x
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Award className="w-4 h-4" />
+                    {q.avgCorrect}% de acerto
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-all">
+                  <Edit className="w-5 h-5" />
+                </button>
+                <button className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-all">
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Quizzes View
+  const QuizzesView = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowQuizModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Criar Quiz/Prova
+          </button>
+
+          <div className="ml-auto text-lg font-bold text-gray-700">
+            {quizzes.length} quizzes criados
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {quizzes.map((quiz) => (
+          <div key={quiz.id} className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    quiz.type === 'practice' ? 'bg-blue-100 text-blue-700' :
+                    quiz.type === 'test' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {quiz.type === 'practice' ? 'Prática' : quiz.type === 'test' ? 'Teste' : 'Prova'}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    quiz.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {quiz.status === 'active' ? 'Ativo' : 'Agendado'}
+                  </span>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-800 mb-2">{quiz.title}</h3>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <div className="text-sm text-gray-600">Matéria</div>
+                    <div className="font-semibold text-gray-800">{quiz.subject}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">Série</div>
+                    <div className="font-semibold text-gray-800">{quiz.grade}ª série</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">Questões</div>
+                    <div className="font-semibold text-gray-800">{quiz.questions}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">Tempo</div>
+                    <div className="font-semibold text-gray-800">{quiz.timeLimit} min</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <Calendar className="w-4 h-4" />
+                    {quiz.availableFrom} até {quiz.availableUntil}
+                  </div>
+                  <div className="text-gray-600">
+                    {quiz.attempts} tentativas · Média: {quiz.avgScore}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-medium transition-all">
+                  Ver Resultados
+                </button>
+                <button className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-all">
+                  <Edit className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Create Question Modal
+  const CreateQuestionModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">Criar Nova Questão</h2>
+        
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Matéria</label>
+              <select
+                value={newQuestion.subject}
+                onChange={(e) => setNewQuestion({...newQuestion, subject: e.target.value})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+              >
+                <option value="">Selecione...</option>
+                <option value="Matemática">Matemática</option>
+                <option value="Física">Física</option>
+                <option value="Português">Português</option>
+                <option value="História">História</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Série</label>
+              <select
+                value={newQuestion.grade}
+                onChange={(e) => setNewQuestion({...newQuestion, grade: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+              >
+                <option value="6">6ª série</option>
+                <option value="7">7ª série</option>
+                <option value="8">8ª série</option>
+                <option value="9">9ª série</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Pergunta</label>
+            <textarea
+              value={newQuestion.question}
+              onChange={(e) => setNewQuestion({...newQuestion, question: e.target.value})}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+              rows="3"
+              placeholder="Digite a pergunta aqui..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Opções de Resposta</label>
+            {newQuestion.options.map((option, idx) => (
+              <div key={idx} className="flex items-center gap-3 mb-2">
+                <input
+                  type="radio"
+                  name="correct"
+                  checked={newQuestion.correct === idx}
+                  onChange={() => setNewQuestion({...newQuestion, correct: idx})}
+                  className="w-5 h-5"
+                />
+                <input
+                  type="text"
+                  value={option}
+                  onChange={(e) => {
+                    const newOptions = [...newQuestion.options];
+                    newOptions[idx] = e.target.value;
+                    setNewQuestion({...newQuestion, options: newOptions});
+                  }}
+                  className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+                  placeholder={`Opção ${String.fromCharCode(65 + idx)}`}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Explicação (opcional)</label>
+            <textarea
+              value={newQuestion.explanation}
+              onChange={(e) => setNewQuestion({...newQuestion, explanation: e.target.value})}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none"
+              rows="2"
+              placeholder="Explique a resposta correta..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Dificuldade</label>
+            <div className="flex gap-3">
+              {['easy', 'medium', 'hard'].map((diff) => (
+                <button
+                  key={diff}
+                  onClick={() => setNewQuestion({...newQuestion, difficulty: diff})}
+                  className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                    newQuestion.difficulty === diff
+                      ? diff === 'easy' ? 'bg-green-500 text-white' :
+                        diff === 'medium' ? 'bg-yellow-500 text-white' :
+                        'bg-red-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {diff === 'easy' ? 'Fácil' : diff === 'medium' ? 'Médio' : 'Difícil'}
+                </button>
+              ))}
