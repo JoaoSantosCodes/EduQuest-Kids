@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 
 /**
  * Componente Card reutilizável com variantes
  */
-function Card({ 
+const Card = memo(function Card({ 
   children, 
   variant = 'default',
   padding = 'default',
@@ -46,7 +46,7 @@ function Card({
       {children}
     </div>
   );
-}
+});
 
 Card.propTypes = {
   children: PropTypes.node.isRequired,

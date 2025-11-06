@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 
 /**
  * Componente Badge reutilizável
  */
-function Badge({ 
+const Badge = memo(function Badge({ 
   children, 
   variant = 'default',
   size = 'md',
@@ -42,7 +42,7 @@ function Badge({
       {children}
     </span>
   );
-}
+});
 
 Badge.propTypes = {
   children: PropTypes.node.isRequired,

@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 import { Loader2 } from 'lucide-react';
 
 /**
  * Componente Button reutilizável com variantes
  */
-function Button({
+const Button = memo(function Button({
   children,
   variant = 'primary',
   size = 'md',
@@ -63,7 +63,7 @@ function Button({
       {!loading && Icon && iconPosition === 'right' && <Icon className="w-5 h-5" />}
     </button>
   );
-}
+});
 
 Button.propTypes = {
   children: PropTypes.node.isRequired,

@@ -1,32 +1,23 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'sonner';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import LoadingSpinner from './components/common/LoadingSpinner';
 
-// Auth Pages
+// Auth Pages - Carregamento imediato (pequenos)
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 
-// Student Portal
-import StudentPortal from './pages/Student/StudentPortal';
-import EduQuizApp from './pages/Student/EduQuizApp';
-
-// Parent Portal
-import ParentPortal from './pages/Parent/ParentPortal';
-
-// Teacher Portal
-import TeacherPortal from './pages/Teacher/TeacherPortal';
-
-// Coordinator Portal
-import CoordinatorPortal from './pages/Coordinator/CoordinatorPortal';
-
-// Test Page
-import TestSupabase from './pages/TestSupabase';
-
-// Auth Callback
-import AuthCallback from './pages/AuthCallback';
+// Lazy loading para portais grandes
+const StudentPortal = lazy(() => import('./pages/Student/StudentPortal'));
+const EduQuizApp = lazy(() => import('./pages/Student/EduQuizApp'));
+const ParentPortal = lazy(() => import('./pages/Parent/ParentPortal'));
+const TeacherPortal = lazy(() => import('./pages/Teacher/TeacherPortal'));
+const CoordinatorPortal = lazy(() => import('./pages/Coordinator/CoordinatorPortal'));
+const TestSupabase = lazy(() => import('./pages/TestSupabase'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -103,14 +94,30 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/test-supabase" element={<TestSupabase />} />
+            <Route 
+              path="/auth/callback" 
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <AuthCallback />
+                </Suspense>
+              } 
+            />
+            <Route 
+              path="/test-supabase" 
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <TestSupabase />
+                </Suspense>
+              } 
+            />
             
             <Route
               path="/student"
               element={
                 <ProtectedRoute allowedRoles={['student']}>
-                  <StudentPortal />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <StudentPortal />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -118,7 +125,9 @@ function App() {
               path="/student-quiz"
               element={
                 <ProtectedRoute allowedRoles={['student']}>
-                  <EduQuizApp />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <EduQuizApp />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -127,7 +136,9 @@ function App() {
               path="/parent"
               element={
                 <ProtectedRoute allowedRoles={['parent']}>
-                  <ParentPortal />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ParentPortal />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -136,7 +147,9 @@ function App() {
               path="/teacher"
               element={
                 <ProtectedRoute allowedRoles={['teacher']}>
-                  <TeacherPortal />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <TeacherPortal />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -145,7 +158,9 @@ function App() {
               path="/coordinator"
               element={
                 <ProtectedRoute allowedRoles={['coordinator']}>
-                  <CoordinatorPortal />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CoordinatorPortal />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />

@@ -17,31 +17,32 @@ class Logger {
     // Em produção, apenas logs de ERROR
     // Em desenvolvimento, todos os logs
     this.level = import.meta.env.PROD ? logLevels.ERROR : logLevels.DEBUG;
+    this.isProduction = import.meta.env.PROD;
   }
 
   /**
    * Log de debug (apenas em desenvolvimento)
    */
   debug(...args) {
-    if (this.level <= logLevels.DEBUG) {
+    if (!this.isProduction && this.level <= logLevels.DEBUG) {
       console.debug('[DEBUG]', ...args);
     }
   }
 
   /**
-   * Log de informação
+   * Log de informação (apenas em desenvolvimento)
    */
   info(...args) {
-    if (this.level <= logLevels.INFO) {
+    if (!this.isProduction && this.level <= logLevels.INFO) {
       console.info('[INFO]', ...args);
     }
   }
 
   /**
-   * Log de aviso
+   * Log de aviso (apenas em desenvolvimento)
    */
   warn(...args) {
-    if (this.level <= logLevels.WARN) {
+    if (!this.isProduction && this.level <= logLevels.WARN) {
       console.warn('[WARN]', ...args);
     }
   }

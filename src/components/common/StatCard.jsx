@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 import Card from './Card';
 import { TrendingUp, TrendingDown } from 'lucide-react';
@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 /**
  * Componente StatCard para exibir estatísticas
  */
-function StatCard({ 
+const StatCard = memo(function StatCard({ 
   icon: Icon,
   title,
   value,
@@ -88,7 +88,7 @@ function StatCard({
       </div>
     </Card>
   );
-}
+});
 
 StatCard.propTypes = {
   icon: PropTypes.elementType,

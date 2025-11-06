@@ -1,3 +1,10 @@
+// Carregar variáveis de ambiente do keystore
+// Fallback para valores padrão se não estiverem definidas
+const keystorePath = process.env.KEYSTORE_PATH || 'eduquest-release.keystore';
+const keystoreAlias = process.env.KEYSTORE_ALIAS || 'eduquest';
+const keystorePassword = process.env.KEYSTORE_PASSWORD || 'eduquest2024';
+const keystoreAliasPassword = process.env.KEYSTORE_ALIAS_PASSWORD || 'eduquest2024';
+
 module.exports = {
   appId: 'com.eduquest.kids',
   appName: 'EduQuest Kids',
@@ -8,10 +15,10 @@ module.exports = {
   },
   android: {
     buildOptions: {
-      keystorePath: 'eduquest-release.keystore',
-      keystoreAlias: 'eduquest',
-      keystorePassword: 'eduquest2024',
-      keystoreAliasPassword: 'eduquest2024',
+      keystorePath: keystorePath,
+      keystoreAlias: keystoreAlias,
+      keystorePassword: keystorePassword,
+      keystoreAliasPassword: keystoreAliasPassword,
     },
     allowMixedContent: true,
   },

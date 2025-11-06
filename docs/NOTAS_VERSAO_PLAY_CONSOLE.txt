@@ -1,0 +1,22 @@
+Versão 1.0.1 - Build Revisada
+
+🎮 EduQuest Kids - App Educacional Gamificado
+
+Funcionalidades:
+✅ Quiz interativo e gamificação para alunos
+✅ Acompanhamento e relatórios para pais
+✅ Gestão de conteúdo e avaliações para professores
+✅ Gestão de turmas para coordenadores
+
+Recursos:
+- Sistema completo de autenticação
+- Interface moderna e responsiva
+- Integração com Supabase
+- Sistema de gamificação com pontuação e níveis
+- Relatórios detalhados de desempenho
+
+Melhorias:
+- Build revisada e otimizada
+- Performance melhorada
+- Correções de bugs menores
+
